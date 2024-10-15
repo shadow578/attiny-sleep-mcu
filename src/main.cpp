@@ -1,13 +1,3 @@
-/**
- * This program is designed to be used with an ATtiny13A microcontroller, using the Arduino IDE and https://github.com/MCUdude/MicroCore.
- * Configure the build as follows:
- * - Board: ATtiny13A
- * - Clock: 1.2 MHz (internal) / maybe slower ? (programming possible ??)
- * - BOD: disable
- * - Bootloader: No
- * - LTO: disable / don't care
- */
-
 #include <avr/io.h>
 #include <avr/sleep.h>
 #include <util/delay.h>
