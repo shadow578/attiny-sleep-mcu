@@ -1,5 +1,12 @@
-// TODO:
-// - setup fuses to disable brown-out detection (reduce power consumption)
+/**
+ * This program is designed to be used with an ATtiny13A microcontroller, using the Arduino IDE and https://github.com/MCUdude/MicroCore.
+ * Configure the build as follows:
+ * - Board: ATtiny13A
+ * - Clock: 1.2 MHz (internal) / maybe slower ? (programming possible ??)
+ * - BOD: disable
+ * - Bootloader: No
+ * - LTO: disable / don't care
+ */
 
 #include <avr/io.h>
 #include <avr/sleep.h>
@@ -19,17 +26,13 @@ static_assert(SLEEP_TIME_TICKS < 0xFFFF, "SLEEP_TIME_TICKS must be less than 0xF
 
 int main()
 {
-    // reduce clock speed to reduce power consumption
-    CLKPR = _BV(CLKPCE);               // enable clock prescaler update
-    CLKPR = _BV(CLKPS1) | _BV(CLKPS0); // set clock division factor to 8
-
     // disable ADC, internal COMP, and WDT to reduce power consumption
     ADCSRA &= ~_BV(ADEN); // ADC enable = 0
     ADCSRB &= ~_BV(ACME); // analog comparator multiplexer enable = 0
     ACSR |= _BV(ACD);     // analog comparator disable = 1
     WDTCR &= ~_BV(WDE);   // disable watchdog timer
 
-    // eet ON pin to input w/ pull-up
+    // set ON pin to input w/ pull-up
     DDRB &= ~_BV(PIN_ON); // set PIN_ON as input
     PORTB |= _BV(PIN_ON); // enable pull-up on PIN_ON
 
@@ -47,6 +50,10 @@ int main()
 
     // TODO: more power consumption reduction possible ?
     // note: cannot enter any of the sleep mode, since they all disable the CPU.
+    
+    // reduce clock speed to reduce power consumption
+    CLKPR = _BV(CLKPCE);               // enable clock prescaler update
+    CLKPR = _BV(CLKPS1) | _BV(CLKPS0); // set clock division factor to 8
 
     // wait for ~30 minutes
     for (uint32_t i = 0; i < SLEEP_TIME_TICKS; i++)
