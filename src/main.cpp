@@ -41,10 +41,6 @@ int main()
     // TODO: more power consumption reduction possible ?
     // note: cannot enter any of the sleep mode, since they all disable the CPU.
     
-    // reduce clock speed to reduce power consumption
-    CLKPR = _BV(CLKPCE);               // enable clock prescaler update
-    CLKPR = _BV(CLKPS1) | _BV(CLKPS0); // set clock division factor to 8
-
     // wait for ~30 minutes
     for (uint32_t i = 0; i < SLEEP_TIME_TICKS; i++)
     {
