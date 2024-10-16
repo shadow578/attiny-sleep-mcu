@@ -5,7 +5,7 @@
 #include <util/delay.h>
 
 // pin definitions
-constexpr uint8_t PIN_ON = PB0;
+constexpr uint8_t PIN_PWR_DOWN = PB0;
 constexpr uint8_t PIN_LOAD_EN = PB1;
 
 // for how long the device should sleep before turning on the load again
@@ -30,16 +30,19 @@ int main()
     wdt_disable();          // "
     power_timer0_disable(); // timer0 power reduction (PRR.PRTIM0) = 1
 
-    // set ON pin to input w/ pull-up
-    DDRB &= ~_BV(PIN_ON); // set PIN_ON as input
-    PORTB |= _BV(PIN_ON); // enable pull-up on PIN_ON
+    // ensure all pins start out as input with no pull-up
+    DDRB = 0x00;
+    PORTB = 0x00;
+
+    // set power down pin to input
+    // DDRB &= ~_BV(PIN_PWR_DOWN);
 
     // set LOAD_EN to output, set HIGH
-    DDRB |= _BV(PIN_LOAD_EN);  // set PIN_LOAD_EN as output
-    PORTB |= _BV(PIN_LOAD_EN); // set PIN_LOAD_EN high
+    DDRB |= _BV(PIN_LOAD_EN);
+    PORTB |= _BV(PIN_LOAD_EN);
 
-    // wait until ON pin is LOW
-    while (PINB & _BV(PIN_ON))
+    // wait until power down pin is HIGH
+    while (!(PINB & _BV(PIN_PWR_DOWN)))
         ;
 
     // set all pins to input, no pull-up, to reduce power consumption
