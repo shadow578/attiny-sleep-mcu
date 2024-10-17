@@ -114,6 +114,3 @@ int main()
     reset_cpu();
     return 0;
 }
-
-
-void setup();
