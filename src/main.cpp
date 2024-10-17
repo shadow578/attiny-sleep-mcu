@@ -11,10 +11,17 @@ constexpr uint8_t PIN_LOAD_EN = PB1;
 // for how long the device should sleep before turning on the load again
 constexpr uint32_t SLEEP_TIME = 30 * 60; // seconds
 
-// _delay_ms() only works ok for values < 262.14 ms, so we call it multiple times in a loop
-constexpr uint32_t SLEEP_TIME_TICK_MS = 100;                                        // how much time to wait in each loop iteration
-constexpr uint32_t SLEEP_TIME_TICKS = ((SLEEP_TIME * 1000UL) / SLEEP_TIME_TICK_MS); // number of iterations
-static_assert(SLEEP_TIME_TICKS < 0xFFFF, "SLEEP_TIME_TICKS must be less than 0xFFFF");
+void wait_for(const uint32_t ms)
+{
+    // _delay_ms() only works ok for values < 262.14 ms, so we call it multiple times in a loop
+    constexpr uint32_t SLEEP_TIME_TICK_MS = 100;
+
+    const uint32_t ticks = (ms * 1000UL) / SLEEP_TIME_TICK_MS;
+    for (uint32_t i = 0; i < ticks; i++)
+    {
+        _delay_ms(SLEEP_TIME_TICK_MS);
+    }
+}
 
 int main()
 {
@@ -53,10 +60,7 @@ int main()
     // note: cannot enter any of the sleep mode, since they all disable the CPU.
 
     // wait for ~30 minutes
-    for (uint32_t i = 0; i < SLEEP_TIME_TICKS; i++)
-    {
-        _delay_ms(SLEEP_TIME_TICK_MS);
-    }
+    wait_for(SLEEP_TIME);
 
     // reset the MCU using watchdog timer
     // for this, enable the watchdog timer with a short timeout and then hang until it resets the MCU.
