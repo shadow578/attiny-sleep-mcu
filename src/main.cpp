@@ -3,10 +3,14 @@
 #include <avr/power.h>
 #include <avr/sleep.h>
 #include <avr/wdt.h>
+#include <util/delay.h>
 
 // pin definitions
-constexpr uint8_t PIN_PWR_DOWN = PB0;
+constexpr uint8_t PIN_PWR_DOWN = PB2;
 constexpr uint8_t PIN_LOAD_EN = PB1;
+
+// PIN_PWR_DOWN state when asserted (= should power down the load)
+constexpr bool PWR_DOWN_ASSERTED_STATE = false; // pulled high; active low
 
 // for how long the device should sleep before turning on the load again
 // uses the WDT for timing, so will be fairly inaccurate.
@@ -16,19 +20,19 @@ EMPTY_INTERRUPT(WDT_vect);
 
 /**
  * Wait for the specified number of seconds.
- * 
+ *
  * @param seconds the number of seconds to wait for
- * 
- * @note 
+ *
+ * @note
  * this function doesn't disable any peripherals. if desired, disable them before calling this function.
- * 
+ *
  * @note
  * this function alters the watchdog timer configuration.
  * additionally, after this function returns, the watchdog timer is disabled.
- * 
+ *
  * @note
  * after this function returns, interrupts are disabled.
- * 
+ *
  * @note
  * loosely based on https://electronics.stackexchange.com/a/151743
  */
@@ -38,8 +42,8 @@ void wait_for(const uint32_t seconds)
 
     // enable the watchdog timer with a timeout of 8s, in interrupt mode
     wdt_reset();
-    MCUSR &= ~_BV(WDRF);          // clear wdt reset flag
-    WDTCR = _BV(WDE) | _BV(WDCE); // enable WDT
+    MCUSR &= ~_BV(WDRF);                     // clear wdt reset flag
+    WDTCR = _BV(WDE) | _BV(WDCE);            // enable WDT
     WDTCR = _BV(WDE) | _BV(WDTIE) | WDTO_8S; // enable WDT interrupt, set timeout to 8s
 
     // sleep for the specified time
@@ -99,9 +103,19 @@ int main()
     DDRB |= _BV(PIN_LOAD_EN);
     PORTB |= _BV(PIN_LOAD_EN);
 
-    // wait until power down pin is HIGH
-    while (!(PINB & _BV(PIN_PWR_DOWN)))
-        ;
+    // wait until power down pin is asserted
+    if (PWR_DOWN_ASSERTED_STATE)
+    {
+        // active high, wait until high
+        while (!(PINB & _BV(PIN_PWR_DOWN)))
+            _delay_ms(10);
+    }
+    else
+    {
+        // active low, wait until low
+        while (PINB & _BV(PIN_PWR_DOWN))
+            _delay_ms(10);
+    }
 
     // set all pins to input, no pull-up, to reduce power consumption
     DDRB = 0x00;
