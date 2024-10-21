@@ -6,20 +6,43 @@
 #include <util/delay.h>
 
 // pin definitions
-constexpr uint8_t PIN_PWR_DOWN = PB2;
-constexpr uint8_t PIN_LOAD_EN = PB1;
+constexpr uint8_t PIN_PWR_DOWN = PB2; // pin to indicate that the load should be powered down
+constexpr uint8_t PIN_LOAD_EN = PB1;  // pin attached to load mosfet gate
 
 // PIN_PWR_DOWN state when asserted (= should power down the load)
 constexpr bool PWR_DOWN_ASSERTED_STATE = false; // pulled high; active low
 
 // for how long the device should sleep before turning on the load again
-// uses the WDT for timing, so will be fairly inaccurate.
-constexpr uint32_t SLEEP_TIME = 30 * 60; // seconds, rounded up to nearest 8s
+// uses the WDT for timing, so will be fairly inaccurate even with correction factor applied.
+// constant is in seconds
+constexpr uint32_t SLEEP_TIME = (30 * 60); // 30 minutes
 
+// correction factor for sleep time.
+// calibrate by measuring actual sleep time, then set this to (desired sleep time / actual sleep time)
+constexpr double SLEEP_TIME_CORRECTION = (30.0 / 37.0);
+
+/**
+ * required by sleep_for()
+ */
 EMPTY_INTERRUPT(WDT_vect);
 
 /**
- * Wait for the specified number of seconds.
+ * Disable the watchdog timer and clear the watchdog timer reset flag.
+ *
+ * @note
+ * required, as per datasheet (WDE bit explanation on P. 49):
+ * WDE is overridden by WDRF in MCUSR.
+ * This means that WDE is always set when WDRF is set.
+ * To clear WDE, WDRF must be cleared first.
+ */
+inline void wdt_disable_actual()
+{
+    MCUSR &= ~_BV(WDRF); // clear WDT reset flag
+    wdt_disable();       // sets WDE to 0
+}
+
+/**
+ * Wait for the specified number of seconds, spending as much time as possible in sleep mode.
  *
  * @param seconds the number of seconds to wait for
  *
@@ -35,33 +58,31 @@ EMPTY_INTERRUPT(WDT_vect);
  *
  * @note
  * loosely based on https://electronics.stackexchange.com/a/151743
+ * and https://electronics.stackexchange.com/a/74850
  */
-void wait_for(const uint32_t seconds)
+void sleep_for(uint32_t seconds)
 {
-    cli();
+    cli();                // disable interrupts
+    wdt_disable_actual(); // clear wdt reset flag and ensure WDT is known configuration
 
-    // enable the watchdog timer with a timeout of 8s, in interrupt mode
-    wdt_reset();
-    MCUSR &= ~_BV(WDRF);                     // clear wdt reset flag
-    WDTCR = _BV(WDE) | _BV(WDCE);            // enable WDT
-    WDTCR = _BV(WDE) | _BV(WDTIE) | WDTO_8S; // enable WDT interrupt, set timeout to 8s
-
-    // sleep for the specified time
-    for (uint32_t i = 0; i < seconds; i += 8)
+    // sleep for the specified number of seconds
+    for (uint32_t i = 0; i < seconds; i++)
     {
-        cli();                               // disable interrupts
-        set_sleep_mode(SLEEP_MODE_PWR_DOWN); // only WDT can wake up the MCU
+        // setup WDT
+        WDTCR |= _BV(WDCE) | _BV(WDE); // allow changes, enable WDT
+        WDTCR = _BV(WDTIE) | WDTO_1S;  // set WDT to interrupt only mode with 1s timeout
+
+        // sleep until WDT interrupt
+        set_sleep_mode(SLEEP_MODE_PWR_DOWN); // deepest sleep mode, only WDT can wake up the MCU
         wdt_reset();                         // start wdt at zero
         sei();                               // enable interrupts
         sleep_mode();                        // sleep until WDT interrupt
-        sleep_disable();
     }
 
+    // disable interrupts and WDT
     cli();
-
-    // disable WDT
     wdt_reset();
-    wdt_disable();
+    wdt_disable_actual();
 }
 
 /**
@@ -73,6 +94,7 @@ void reset_cpu()
     // then, we hang in a loop until the watchdog timer resets the CPU for us.
 
     // note: wdt_enable resets WDTIE, so we don't need to disable it explicitly
+    wdt_disable_actual();
     wdt_enable(WDTO_15MS);
     while (1)
         ;
@@ -80,15 +102,15 @@ void reset_cpu()
 
 int main()
 {
-    // disable interrupts, we don't need them
+    // disable interrupts, we don't need them yet
     cli();
 
     // disable ADC, internal COMP, and WDT to reduce power consumption
+    wdt_disable_actual();   // disable watchdog timer early in case it's enabled somehow
     ADCSRB &= ~_BV(ACME);   // analog comparator multiplexer enable = 0
     ACSR |= _BV(ACD);       // analog comparator disable = 1
     ADCSRA &= ~_BV(ADEN);   // ADC enable = 0
     power_adc_disable();    // ADC power reduction (PRR.PRADC) = 1
-    wdt_disable();          // disable watchdog timer
     power_timer0_disable(); // timer0 power reduction (PRR.PRTIM0) = 1
     // power_all_disable();
 
@@ -122,7 +144,8 @@ int main()
     PORTB = 0x00;
 
     // wait for ~30 minutes
-    wait_for(SLEEP_TIME);
+    constexpr uint32_t SLEEP_TIME_ADJUSTED = static_cast<uint32_t>(static_cast<double>(SLEEP_TIME) * SLEEP_TIME_CORRECTION);
+    sleep_for(SLEEP_TIME_ADJUSTED);
 
     // reset the CPU
     reset_cpu();
