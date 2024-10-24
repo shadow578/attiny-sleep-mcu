@@ -5,15 +5,30 @@
 #include <util/delay.h>
 
 #include "util.hpp"
+#include "pulse_counter.hpp"
 #include "i2c_device/i2c_device.hpp"
 
 // load enable pin
 constexpr uint8_t PIN_LOAD_EN = PB2;
 
-// i2c configuration
+// pin that low pulses are counted on
+// note: must be PB1 since INT0 is fixed to it
+// constexpr uint8_t PIN_PULSE_COUNTER = PB1;
+
+// i2c device address
 constexpr uint8_t I2C_ADDRESS = 0x50;
-constexpr uint8_t I2C_COMMAND_POWER_DOWN = 0x01;     // upon receiving this command, the device will power down the load and sleep for SLEEP_TIME
-constexpr uint8_t I2C_COMMAND_SET_SLEEP_TIME = 0x02; // set the sleep time in minutes. if set to 0, this reads the current sleep time.
+
+// upon receiving this command, the device will power down the load and sleep for SLEEP_TIME
+constexpr uint8_t I2C_COMMAND_POWER_DOWN = 0x01;
+
+// set the sleep time in minutes. if set to 0, this reads the current sleep time.
+constexpr uint8_t I2C_COMMAND_SET_SLEEP_TIME = 0x02;
+
+// read the pulse count
+// the number of pulses returned will be subtracted from the total pulse count.
+// thus, if the pulse count is larger than 255, multiple reads will be required.
+// the pulse count will be reset to 0 after reading completes.
+constexpr uint8_t I2C_COMMAND_READ_PULSE_COUNT = 0x03;
 
 uint8_t sleep_time_minutes = 30;
 
@@ -60,7 +75,17 @@ void i2c_request_handler(const uint8_t address, const bool write, uint8_t &data)
                 sleep_time_minutes = data;
             }
             break;
-
+        case I2C_COMMAND_READ_PULSE_COUNT:
+            if (pulse_counter::count > 255)
+            {
+                response_data = 255;
+                pulse_counter::count -= 255;
+            }
+            else
+            {
+                response_data = pulse_counter::count;
+                pulse_counter::count = 0;
+            }
         default:
             break;
         }
@@ -98,6 +123,9 @@ int main()
     // start i2c
     // this enables interrupts
     i2c::begin(i2c_address_handler, i2c_request_handler);
+
+    // start counting pulses
+    pulse_counter::begin();
 
     // wait for i2c to do something
     for (;;)

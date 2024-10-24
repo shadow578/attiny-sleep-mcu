@@ -12,17 +12,17 @@ namespace i2c
     /**
      * I2C SDA pin bit number
      */
-    constexpr uint8_t PIN_SDA = PB1;
+    constexpr uint8_t PIN_SDA = PB3;
 
     /**
      * I2C SCL pin bit number
      */
-    constexpr uint8_t PIN_SCL = PB0;
+    constexpr uint8_t PIN_SCL = PB4;
 
     /**
      * I2C SCL pin change interrupt bit number
      */
-    constexpr uint8_t SDA_PCINT = PCINT1;
+    constexpr uint8_t SDA_PCINT = PCINT3;
 
     /**
      * I2C state machine states
@@ -82,4 +82,4 @@ namespace i2c
      */
     void begin(const address_handler_t address_handler, const request_handler_t request_handler);
 
-}; // namespace i2c
+} // namespace i2c
