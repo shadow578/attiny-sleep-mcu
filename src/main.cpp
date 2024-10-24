@@ -11,6 +11,9 @@
 // load enable pin
 constexpr uint8_t PIN_LOAD_EN = PB2;
 
+// how long to sleep for in seconds
+constexpr uint32_t SLEEP_TIME = 30 * 60;
+
 // pin that low pulses are counted on
 // note: must be PB1 since INT0 is fixed to it
 // constexpr uint8_t PIN_PULSE_COUNTER = PB1;
@@ -21,16 +24,11 @@ constexpr uint8_t I2C_ADDRESS = 0x50;
 // upon receiving this command, the device will power down the load and sleep for SLEEP_TIME
 constexpr uint8_t I2C_COMMAND_POWER_DOWN = 0x01;
 
-// set the sleep time in minutes. if set to 0, this reads the current sleep time.
-constexpr uint8_t I2C_COMMAND_SET_SLEEP_TIME = 0x02;
-
 // read the pulse count
 // the number of pulses returned will be subtracted from the total pulse count.
 // thus, if the pulse count is larger than 255, multiple reads will be required.
 // the pulse count will be reset to 0 after reading completes.
 constexpr uint8_t I2C_COMMAND_READ_PULSE_COUNT = 0x03;
-
-uint8_t sleep_time_minutes = 30;
 
 /**
  * power down the load and sleep for the specified time
@@ -41,8 +39,8 @@ void power_down()
     DDRB = 0x00;
     PORTB = 0x00;
 
-    // sleep for reqeusted number of minutes
-    sleep_for(sleep_time_minutes * 60);
+    // sleep for reqeusted time
+    sleep_for(SLEEP_TIME);
 
     // reset the CPU
     reset_cpu();
@@ -64,16 +62,6 @@ void i2c_request_handler(const uint8_t address, const bool write, uint8_t &data)
         {
         case I2C_COMMAND_POWER_DOWN:
             power_down();
-            break;
-        case I2C_COMMAND_SET_SLEEP_TIME:
-            if (data == 0)
-            {
-                response_data = sleep_time_minutes;
-            }
-            else
-            {
-                sleep_time_minutes = data;
-            }
             break;
         case I2C_COMMAND_READ_PULSE_COUNT:
             if (pulse_counter::count > 255)
