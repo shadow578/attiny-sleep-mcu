@@ -10,13 +10,12 @@
 // load enable pin
 constexpr uint8_t PIN_LOAD_EN = PB2;
 
-// for how long the device should sleep before turning on the load again
-// uses the WDT for timing, so will be fairly inaccurate.
-constexpr uint32_t SLEEP_TIME = 30 * 60; // seconds, rounded up to nearest 8s
-
 // i2c configuration
 constexpr uint8_t I2C_ADDRESS = 0x50;
-constexpr uint8_t I2C_COMMAND_POWER_DOWN = 0x01; // upon receiving this command, the device will power down the load and sleep for SLEEP_TIME
+constexpr uint8_t I2C_COMMAND_POWER_DOWN = 0x01;     // upon receiving this command, the device will power down the load and sleep for SLEEP_TIME
+constexpr uint8_t I2C_COMMAND_SET_SLEEP_TIME = 0x02; // set the sleep time in minutes. if set to 0, this reads the current sleep time.
+
+uint8_t sleep_time_minutes = 30;
 
 /**
  * power down the load and sleep for the specified time
@@ -27,8 +26,8 @@ void power_down()
     DDRB = 0x00;
     PORTB = 0x00;
 
-    // sleep for ~30 minutes
-    sleep_for(SLEEP_TIME);
+    // sleep for reqeusted number of minutes
+    sleep_for(sleep_time_minutes * 60);
 
     // reset the CPU
     reset_cpu();
@@ -41,17 +40,36 @@ bool i2c_address_handler(const uint8_t address)
 
 void i2c_request_handler(const uint8_t address, const bool write, uint8_t &data)
 {
+    static uint8_t response_data;
+
     if (write)
     {
+        // handle command
         switch (data)
         {
         case I2C_COMMAND_POWER_DOWN:
             power_down();
             break;
+        case I2C_COMMAND_SET_SLEEP_TIME:
+            if (data == 0)
+            {
+                response_data = sleep_time_minutes;
+            }
+            else
+            {
+                sleep_time_minutes = data;
+            }
+            break;
 
         default:
             break;
         }
+    }
+    else
+    {
+        // hopefully we've had a write command to request some data,
+        // otherwise this will be invalid;
+        data = response_data;
     }
 }
 
