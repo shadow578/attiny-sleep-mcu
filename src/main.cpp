@@ -1,86 +1,63 @@
 #include <avr/interrupt.h>
 #include <avr/io.h>
 #include <avr/power.h>
-#include <avr/sleep.h>
 #include <avr/wdt.h>
 #include <util/delay.h>
 
-// pin definitions
-constexpr uint8_t PIN_PWR_DOWN = PB2;
-constexpr uint8_t PIN_LOAD_EN = PB1;
+#include "util.hpp"
+#include "i2c_device/i2c_device.hpp"
 
-// PIN_PWR_DOWN state when asserted (= should power down the load)
-constexpr bool PWR_DOWN_ASSERTED_STATE = false; // pulled high; active low
+// load enable pin
+constexpr uint8_t PIN_LOAD_EN = PB2;
 
 // for how long the device should sleep before turning on the load again
 // uses the WDT for timing, so will be fairly inaccurate.
 constexpr uint32_t SLEEP_TIME = 30 * 60; // seconds, rounded up to nearest 8s
 
-EMPTY_INTERRUPT(WDT_vect);
+// i2c configuration
+constexpr uint8_t I2C_ADDRESS = 0x50;
+constexpr uint8_t I2C_COMMAND_POWER_DOWN = 0x01; // upon receiving this command, the device will power down the load and sleep for SLEEP_TIME
 
 /**
- * Wait for the specified number of seconds.
- *
- * @param seconds the number of seconds to wait for
- *
- * @note
- * this function doesn't disable any peripherals. if desired, disable them before calling this function.
- *
- * @note
- * this function alters the watchdog timer configuration.
- * additionally, after this function returns, the watchdog timer is disabled.
- *
- * @note
- * after this function returns, interrupts are disabled.
- *
- * @note
- * loosely based on https://electronics.stackexchange.com/a/151743
+ * power down the load and sleep for the specified time
  */
-void wait_for(const uint32_t seconds)
+void power_down()
 {
-    cli();
+    // set all pins to input, no pull-up, to reduce power consumption
+    DDRB = 0x00;
+    PORTB = 0x00;
 
-    // enable the watchdog timer with a timeout of 8s, in interrupt mode
-    wdt_reset();
-    MCUSR &= ~_BV(WDRF);                     // clear wdt reset flag
-    WDTCR = _BV(WDE) | _BV(WDCE);            // enable WDT
-    WDTCR = _BV(WDE) | _BV(WDTIE) | WDTO_8S; // enable WDT interrupt, set timeout to 8s
+    // sleep for ~30 minutes
+    sleep_for(SLEEP_TIME);
 
-    // sleep for the specified time
-    for (uint32_t i = 0; i < seconds; i += 8)
-    {
-        cli();                               // disable interrupts
-        set_sleep_mode(SLEEP_MODE_PWR_DOWN); // only WDT can wake up the MCU
-        wdt_reset();                         // start wdt at zero
-        sei();                               // enable interrupts
-        sleep_mode();                        // sleep until WDT interrupt
-        sleep_disable();
-    }
-
-    cli();
-
-    // disable WDT
-    wdt_reset();
-    wdt_disable();
+    // reset the CPU
+    reset_cpu();
 }
 
-/**
- * Reset the CPU.
- */
-void reset_cpu()
+bool i2c_address_handler(const uint8_t address)
 {
-    // to reset the cpu, we enable the watchdog timer with a very short timeout.
-    // then, we hang in a loop until the watchdog timer resets the CPU for us.
+    return address == I2C_ADDRESS;
+}
 
-    // note: wdt_enable resets WDTIE, so we don't need to disable it explicitly
-    wdt_enable(WDTO_15MS);
-    while (1)
-        ;
+void i2c_request_handler(const uint8_t address, const bool write, uint8_t &data)
+{
+    if (write)
+    {
+        switch (data)
+        {
+        case I2C_COMMAND_POWER_DOWN:
+            power_down();
+            break;
+
+        default:
+            break;
+        }
+    }
 }
 
 int main()
 {
-    // disable interrupts, we don't need them
+    // disable interrupts, we don't need them yet
     cli();
 
     // disable ADC, internal COMP, and WDT to reduce power consumption
@@ -96,35 +73,18 @@ int main()
     DDRB = 0x00;  // set all pins to input
     PORTB = 0x00; // disable pull-up on all pins
 
-    // set power down pin to input
-    // DDRB &= ~_BV(PIN_PWR_DOWN); // redundant: all pins are input at this point
-
-    // set LOAD_EN to output, set HIGH
+    // set LOAD_EN to output, set HIGH to power the load
     DDRB |= _BV(PIN_LOAD_EN);
     PORTB |= _BV(PIN_LOAD_EN);
 
-    // wait until power down pin is asserted
-    if (PWR_DOWN_ASSERTED_STATE)
+    // start i2c
+    // this enables interrupts
+    i2c::begin(i2c_address_handler, i2c_request_handler);
+
+    // wait for i2c to do something
+    for (;;)
     {
-        // active high, wait until high
-        while (!(PINB & _BV(PIN_PWR_DOWN)))
-            _delay_ms(10);
+        asm volatile("nop");
     }
-    else
-    {
-        // active low, wait until low
-        while (PINB & _BV(PIN_PWR_DOWN))
-            _delay_ms(10);
-    }
-
-    // set all pins to input, no pull-up, to reduce power consumption
-    DDRB = 0x00;
-    PORTB = 0x00;
-
-    // wait for ~30 minutes
-    wait_for(SLEEP_TIME);
-
-    // reset the CPU
-    reset_cpu();
     return 0;
 }
