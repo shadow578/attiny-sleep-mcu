@@ -1,5 +1,6 @@
 #include "i2c_device.hpp"
 #include <avr/interrupt.h>
+#include "../util.hpp"
 
 using namespace i2c;
 
@@ -32,8 +33,13 @@ void i2c::begin(const address_handler_t ah, const request_handler_t rh)
     DDRB &= ~(_BV(PIN_SDA) | _BV(PIN_SCL));
 
     // enable SDA pin change interrupt
-    PCMSK |= _BV(SDA_PCINT);
-    GIMSK |= _BV(PCIE);
+    #if IS_ATTINY13
+        PCMSK |= _BV(SDA_PCINT);
+        GIMSK |= _BV(PCIE);
+    #else
+        PCMSK0 |= _BV(SDA_PCINT);
+        PCICR |= _BV(PCIE0);
+    #endif
 
     // enable global interrupts
     sei();
@@ -135,7 +141,11 @@ ISR(PCINT0_vect)
     {
         // this is a start condition, disable pin change interrupt and reset state
         // we handle the rest synchronously in the interrupt
-        GIMSK &= ~_BV(PCIE);
+        #if IS_ATTINY13
+            GIMSK &= ~_BV(PCIE);
+        #else
+            PCICR &= ~_BV(PCIE0);
+        #endif
         state = RECEIVE_ADDRESS;
 
         // wait for SCL to go low
@@ -230,6 +240,10 @@ ISR(PCINT0_vect)
 
         // re-enable pin change interrupt
         // we are WAIT_FOR_START again
-        GIMSK |= _BV(PCIE);
+        #if IS_ATTINY13
+            GIMSK |= _BV(PCIE);
+        #else
+            PCICR |= _BV(PCIE0);
+        #endif
     }
 }

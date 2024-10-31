@@ -1,6 +1,8 @@
 #pragma once
 #include <avr/io.h>
 
+#define IS_ATTINY13 (defined(__AVR_ATtiny13__) || defined (__AVR_ATtiny13A__))
+
 /**
  * Wait for the specified number of seconds.
  *
