@@ -9,20 +9,46 @@
 
 namespace i2c
 {
+    #if !defined(CONF_PIN_SDA)
+        #define CONF_PIN_SDA PB3
+    #endif
+
+    #if !defined(CONF_PIN_SCL)
+        #define CONF_PIN_SCL PB4
+    #endif
+
+    #if !defined(CONF_SDA_PCINT)
+        #if CONF_PIN_SDA == PB0
+            #define CONF_SDA_PCINT PCINT0
+        #elif CONF_PIN_SDA == PB1
+            #define CONF_SDA_PCINT PCINT1
+        #elif CONF_PIN_SDA == PB2
+            #define CONF_SDA_PCINT PCINT2
+        #elif CONF_PIN_SDA == PB3
+            #define CONF_SDA_PCINT PCINT3
+        #elif CONF_PIN_SDA == PB4
+            #define CONF_SDA_PCINT PCINT4
+        #elif CONF_PIN_SDA == PB5
+            #define CONF_SDA_PCINT PCINT5
+        #else
+            #error "cannot auto-configure CONF_SDA_PCINT! please specify it manually!"
+        #endif
+    #endif
+
     /**
      * I2C SDA pin bit number
      */
-    constexpr uint8_t PIN_SDA = PB3;
+    constexpr uint8_t PIN_SDA = CONF_PIN_SDA;
 
     /**
      * I2C SCL pin bit number
      */
-    constexpr uint8_t PIN_SCL = PB4;
+    constexpr uint8_t PIN_SCL = CONF_PIN_SCL;
 
     /**
      * I2C SCL pin change interrupt bit number
      */
-    constexpr uint8_t SDA_PCINT = PCINT3;
+    constexpr uint8_t SDA_PCINT = CONF_SDA_PCINT;
 
     /**
      * I2C state machine states
