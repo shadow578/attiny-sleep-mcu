@@ -134,116 +134,121 @@ void write_ack()
 /**
  * pin change on SDA pin
  */
-ISR(PCINT0_vect)
+bool i2c::on_pcint0()
 {
     // SDA is low and SCL is high?
-    if (!read_sda() && read_scl())
+    if (!(!read_sda() && read_scl()))
     {
-        // this is a start condition, disable pin change interrupt and reset state
-        // we handle the rest synchronously in the interrupt
-        #if IS_ATTINY13
-            GIMSK &= ~_BV(PCIE);
-        #else
-            PCICR &= ~_BV(PCIE0);
-        #endif
-        state = RECEIVE_ADDRESS;
-
-        // wait for SCL to go low
-        while (read_scl())
-            ;
-
-        // enter state machine loop until we get back to WAIT_FOR_START
-        uint8_t address, data;
-        while (state != WAIT_FOR_START)
-        {
-            switch (state)
-            {
-            case RECEIVE_ADDRESS:
-            {
-                const uint8_t r = read_byte(address);
-                state = HANDLE_ADDRESS;
-
-                // STOP condition?
-                if (r == 1)
-                {
-                    state = WAIT_FOR_START;
-                    break;
-                }
-
-                // START condition?
-                if (r == 2)
-                {
-                    state = RECEIVE_ADDRESS;
-                    break;
-                }
-
-                break;
-            }
-            case HANDLE_ADDRESS:
-            {
-                const bool handle = address_handler(address & 0xfe);
-                if (handle)
-                {
-                    // this device handles the address, ACK
-                    write_ack();
-
-                    // look at the R/W bit to determine next state
-                    state = (address & 1) ? SEND_DATA : RECEIVE_DATA;
-                }
-                else
-                {
-                    // we don't handle the address, wait for next start condition
-                    state = WAIT_FOR_START;
-                }
-
-                break;
-            }
-            case RECEIVE_DATA:
-            {
-                const uint8_t r = read_byte(data);
-                state = WAIT_FOR_START;
-
-                // STOP condition?
-                if (r == 1)
-                {
-                    state = WAIT_FOR_START;
-                    break;
-                }
-
-                // START condition?
-                if (r == 2)
-                {
-                    state = RECEIVE_ADDRESS;
-                    break;
-                }
-
-                // data is for us, send ACK then handle it
-                write_ack();
-                request_handler(address, true, data);
-                break;
-            }
-            case SEND_DATA:
-            {
-                request_handler(address, false, data);
-                state = WAIT_FOR_START;
-
-                write_byte(data);
-                break;
-            }
-            default:
-            {
-                state = WAIT_FOR_START;
-                break;
-            }
-            }
-        }
-
-        // re-enable pin change interrupt
-        // we are WAIT_FOR_START again
-        #if IS_ATTINY13
-            GIMSK |= _BV(PCIE);
-        #else
-            PCICR |= _BV(PCIE0);
-        #endif
+        // no, abort
+        return false;
     }
+    
+    // this is a start condition, disable pin change interrupt and reset state
+    // we handle the rest synchronously in the interrupt
+    #if IS_ATTINY13
+        GIMSK &= ~_BV(PCIE);
+    #else
+        PCICR &= ~_BV(PCIE0);
+    #endif
+    state = RECEIVE_ADDRESS;
+
+    // wait for SCL to go low
+    while (read_scl())
+        ;
+
+    // enter state machine loop until we get back to WAIT_FOR_START
+    uint8_t address, data;
+    while (state != WAIT_FOR_START)
+    {
+        switch (state)
+        {
+        case RECEIVE_ADDRESS:
+        {
+            const uint8_t r = read_byte(address);
+            state = HANDLE_ADDRESS;
+
+            // STOP condition?
+            if (r == 1)
+            {
+                state = WAIT_FOR_START;
+                break;
+            }
+
+            // START condition?
+            if (r == 2)
+            {
+                state = RECEIVE_ADDRESS;
+                break;
+            }
+
+            break;
+        }
+        case HANDLE_ADDRESS:
+        {
+            const bool handle = address_handler(address & 0xfe);
+            if (handle)
+            {
+                // this device handles the address, ACK
+                write_ack();
+
+                // look at the R/W bit to determine next state
+                state = (address & 1) ? SEND_DATA : RECEIVE_DATA;
+            }
+            else
+            {
+                // we don't handle the address, wait for next start condition
+                state = WAIT_FOR_START;
+            }
+
+            break;
+        }
+        case RECEIVE_DATA:
+        {
+            const uint8_t r = read_byte(data);
+            state = WAIT_FOR_START;
+
+            // STOP condition?
+            if (r == 1)
+            {
+                state = WAIT_FOR_START;
+                break;
+            }
+
+            // START condition?
+            if (r == 2)
+            {
+                state = RECEIVE_ADDRESS;
+                break;
+            }
+
+            // data is for us, send ACK then handle it
+            write_ack();
+            request_handler(address, true, data);
+            break;
+        }
+        case SEND_DATA:
+        {
+            request_handler(address, false, data);
+            state = WAIT_FOR_START;
+
+            write_byte(data);
+            break;
+        }
+        default:
+        {
+            state = WAIT_FOR_START;
+            break;
+        }
+        }
+    }
+
+    // re-enable pin change interrupt
+    // we are WAIT_FOR_START again
+    #if IS_ATTINY13
+        GIMSK |= _BV(PCIE);
+    #else
+        PCICR |= _BV(PCIE0);
+    #endif
+
+    return true;
 }

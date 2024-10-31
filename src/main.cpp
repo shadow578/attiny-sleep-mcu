@@ -122,3 +122,9 @@ int main()
     }
     return 0;
 }
+
+ISR(PCINT0_vect)
+{
+    if (i2c::on_pcint0()) return;
+    if (pulse_counter::on_pcint0()) return;
+}

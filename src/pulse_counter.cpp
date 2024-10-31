@@ -9,28 +9,32 @@ volatile uint16_t pulse_counter::count = 0;
 
 void pulse_counter::begin()
 {
-    // set PB1 as input with pull-up resistor
-    DDRB &= ~_BV(PB1); // TODO on non-attiny13, this pin doesn't match!
-    PORTB |= _BV(PB1);
+    // set pin as input with pull-up resistor
+    DDRB &= ~_BV(PIN_PULSE_COUNTER);
+    PORTB |= _BV(PIN_PULSE_COUNTER);
 
-    // enable interrupt on low level,
-    // since only INT0 level interrupts can wake the MCU from sleep
-    MCUCR &= ~_BV(ISC00) | ~_BV(ISC01); // ICS00 = 0, ICS01 = 0
-
-    // enable INT0
+    // enable pin change interrupt
     #if IS_ATTINY13
-        GIMSK |= _BV(INT0);
+        PCMSK |= _BV(PULSE_COUNTER_PCINT);
+        GIMSK |= _BV(PCIE);
     #else
-        #warning "atmega code missing"
+        PCMSK0 |= _BV(PULSE_COUNTER_PCINT);
+        PCICR |= _BV(PCIE0);
     #endif
 
     // enable global interrupts
     sei();
 }
 
-// TODO: use a PCINT instead of INT0 for additional flexibility
-ISR(INT0_vect)
+bool pulse_counter::on_pcint0()
 {
+    // is counting pin low?
+    if (PINB & _BV(PIN_PULSE_COUNTER))
+    {
+        // no, abort
+        return false;
+    }
+
     // increment pulse count
     count++;
 
@@ -39,4 +43,6 @@ ISR(INT0_vect)
     {
         sleep_cpu();
     }
+
+    return true;
 }

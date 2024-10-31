@@ -1,6 +1,7 @@
 /**
  * simple I2C device library for the attiny13.
- *
+ * note that SDA and SCL pins must both reside on PORT B.
+ * 
  * based on https://github.com/leonhiem/i2c_attiny13/blob/main/mod/main.c
  */
 
@@ -107,5 +108,13 @@ namespace i2c
      * @note global interrupts are enabled by this function and must remain enabled to receive I2C requests
      */
     void begin(const address_handler_t address_handler, const request_handler_t request_handler);
+
+    /**
+     * i2c::begin sets up a pin change interrupt on the SDA pin. 
+     * it's the users responsibility to call this function from the PCINT0 interrupt handler.
+     * @return did this function handle the interrupt?
+     * @note extra calls (e.g. because other functions also use PCINT0) are permitted
+     */
+    bool on_pcint0();
 
 } // namespace i2c
