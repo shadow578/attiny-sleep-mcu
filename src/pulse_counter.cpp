@@ -2,6 +2,7 @@
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 #include "util.hpp"
+#include "print.hpp"
 
 using namespace pulse_counter;
 
@@ -9,6 +10,9 @@ volatile uint16_t pulse_counter::count = 0;
 
 void pulse_counter::begin()
 {
+    PRINT_PREFIX();
+    PRINTLN(F("pulse_counter::begin()"));
+
     // set pin as input with pull-up resistor
     DDRB &= ~_BV(PIN_PULSE_COUNTER);
     PORTB |= _BV(PIN_PULSE_COUNTER);

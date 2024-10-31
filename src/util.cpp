@@ -2,12 +2,17 @@
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 #include <avr/wdt.h>
+#include "print.hpp"
 
 #if IS_ATTINY13
     EMPTY_INTERRUPT(WDT_vect);
 
     void sleep_for(const uint32_t seconds)
     {
+        PRINT_PREFIX();
+        PRINT(F("sleep_for() seconds="));
+        PRINTLN(seconds);
+
         cli();
 
         // enable the watchdog timer with a timeout of 8s, in interrupt mode
@@ -39,6 +44,10 @@
 
     void sleep_for(const uint32_t seconds)
     {
+        PRINT_PREFIX();
+        PRINT(F("sleep_for() seconds="));
+        PRINTLN(seconds);
+
         for(uint32_t i = 0; i < seconds; i++)
         {
             _delay_ms(1000);
@@ -48,6 +57,9 @@
 
 void reset_cpu()
 {
+    PRINT_PREFIX();
+    PRINTLN(F("reset_cpu()"));
+
     // to reset the cpu, we enable the watchdog timer with a very short timeout.
     // then, we hang in a loop until the watchdog timer resets the CPU for us.
 

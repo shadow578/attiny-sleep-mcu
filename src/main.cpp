@@ -5,6 +5,7 @@
 #include <util/delay.h>
 
 #include "util.hpp"
+#include "print.hpp"
 #include "pulse_counter.hpp"
 #include "i2c_device/i2c_device.hpp"
 
@@ -35,6 +36,9 @@ constexpr uint8_t I2C_COMMAND_READ_PULSE_COUNT = 0x03;
  */
 void power_down()
 {
+    PRINT_PREFIX();
+    PRINTLN(F("power_down()"));
+
     // set all pins to input, no pull-up, to reduce power consumption
     DDRB = 0x00;
     PORTB = 0x00;
@@ -48,12 +52,32 @@ void power_down()
 
 bool i2c_address_handler(const uint8_t address)
 {
+    PRINT_PREFIX();
+    PRINT(F("i2c_address_handler called for 0x"));
+    PRINTLN(address, HEX);
+
     return address == I2C_ADDRESS;
 }
 
 void i2c_request_handler(const uint8_t address, const bool write, uint8_t &data)
 {
     static uint8_t response_data;
+
+    PRINT_PREFIX();
+    PRINT(F("i2c_request_handler called for a=0x"));
+    PRINT(address, HEX);
+    PRINT(F(", w="));
+    PRINT(write ? F("0") : F("1"));
+    PRINT(F(", data=0x"));
+    if (write)
+    {
+        PRINT(response_data, HEX);
+    }
+    else
+    {
+        PRINT(data, HEX);
+    }
+    PRINTLN();
 
     if (write)
     {
@@ -88,10 +112,16 @@ void i2c_request_handler(const uint8_t address, const bool write, uint8_t &data)
 
 int main()
 {
+    PRINT_BEGIN();
+    PRINT_PREFIX();
+    PRINTLN();
+
     // disable interrupts, we don't need them yet
     cli();
 
     // disable ADC, internal COMP, and WDT to reduce power consumption
+    PRINT_PREFIX();
+    PRINTLN(F("setting power saving measures"));
     ADCSRB &= ~_BV(ACME);   // analog comparator multiplexer enable = 0
     ACSR |= _BV(ACD);       // analog comparator disable = 1
     ADCSRA &= ~_BV(ADEN);   // ADC enable = 0
@@ -116,6 +146,8 @@ int main()
     pulse_counter::begin();
 
     // wait for i2c to do something
+    PRINT_PREFIX();
+    PRINTLN(F("init done, waiting idle"));
     for (;;)
     {
         asm volatile("nop");
@@ -125,6 +157,8 @@ int main()
 
 ISR(PCINT0_vect)
 {
-    if (i2c::on_pcint0()) return;
-    if (pulse_counter::on_pcint0()) return;
+    if (i2c::on_pcint0())
+        return;
+    if (pulse_counter::on_pcint0())
+        return;
 }

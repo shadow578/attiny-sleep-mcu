@@ -1,6 +1,7 @@
 #include "i2c_device.hpp"
 #include <avr/interrupt.h>
 #include "../util.hpp"
+#include "../print.hpp"
 
 using namespace i2c;
 
@@ -25,6 +26,9 @@ inline void sda_low()
 
 void i2c::begin(const address_handler_t ah, const request_handler_t rh)
 {
+    PRINT_PREFIX(); 
+    PRINTLN(F("i2c::begin"));
+
     address_handler = ah;
     request_handler = rh;
 
@@ -52,6 +56,9 @@ void i2c::begin(const address_handler_t ah, const request_handler_t rh)
  */
 uint8_t read_byte(uint8_t &data)
 {
+    PRINT_PREFIX();
+    PRINTLN(F("read_byte"));
+
     for (uint8_t i = 0; i < 8; i++)
     {
         // wait for SCL to go high
@@ -77,6 +84,9 @@ uint8_t read_byte(uint8_t &data)
         }
     }
 
+    PRINT_PREFIX(); 
+    PRINT(F("read_byte result 0x"));
+    PRINTLN(data, HEX);
     return 0;
 }
 
@@ -86,6 +96,10 @@ uint8_t read_byte(uint8_t &data)
  */
 void write_byte(uint8_t data)
 {
+    PRINT_PREFIX(); 
+    PRINT(F("write_byte 0x"));
+    PRINTLN(data, HEX);
+
     for (uint8_t i = 0; i < 8; i++)
     {
         // set SDA to the bit, MSB first
@@ -152,6 +166,9 @@ bool i2c::on_pcint0()
     #endif
     state = RECEIVE_ADDRESS;
 
+    PRINT_PREFIX();
+    PRINTLN(F("i2c state=RECEIVE_ADDRESS (PCINT start)"));
+
     // wait for SCL to go low
     while (read_scl())
         ;
@@ -171,6 +188,8 @@ bool i2c::on_pcint0()
             if (r == 1)
             {
                 state = WAIT_FOR_START;
+                PRINT_PREFIX();
+                PRINTLN(F("i2c state=WAIT_FOR_START (RECEIVE_ADDRESS STOP received)"));
                 break;
             }
 
@@ -178,9 +197,13 @@ bool i2c::on_pcint0()
             if (r == 2)
             {
                 state = RECEIVE_ADDRESS;
+                PRINT_PREFIX();
+                PRINTLN(F("i2c state=RECEIVE_ADDRESS (RECEIVE_ADDRESS START received)"));
                 break;
             }
 
+            PRINT_PREFIX();
+            PRINTLN(F("i2c state=HANDLE_ADDRESS (RECEIVE_ADDRESS ok)"));
             break;
         }
         case HANDLE_ADDRESS:
@@ -192,12 +215,25 @@ bool i2c::on_pcint0()
                 write_ack();
 
                 // look at the R/W bit to determine next state
-                state = (address & 1) ? SEND_DATA : RECEIVE_DATA;
+                if (address & 1)
+                {
+                    state = SEND_DATA;
+                    PRINT_PREFIX();
+                    PRINTLN(F("i2c state=SEND_DATA (HANDLE_ADDRESS W set)"));
+                }
+                else 
+                {
+                    state = RECEIVE_DATA;
+                    PRINT_PREFIX();
+                    PRINTLN(F("i2c state=RECEIVE_DATA (HANDLE_ADDRESS W clear)"));
+                }
             }
             else
             {
                 // we don't handle the address, wait for next start condition
                 state = WAIT_FOR_START;
+                PRINT_PREFIX();
+                PRINTLN(F("i2c state=WAIT_FOR_START (HANDLE_ADDRESS not handled)"));
             }
 
             break;
@@ -211,6 +247,8 @@ bool i2c::on_pcint0()
             if (r == 1)
             {
                 state = WAIT_FOR_START;
+                PRINT_PREFIX(); 
+                PRINTLN(F("i2c state=WAIT_FOR_START (RECEIVE_DATA STOP received)"));
                 break;
             }
 
@@ -218,12 +256,17 @@ bool i2c::on_pcint0()
             if (r == 2)
             {
                 state = RECEIVE_ADDRESS;
+                PRINT_PREFIX(); 
+                PRINTLN(F("i2c state=RECEIVE_ADDRESS (RECEIVE_DATA START received)"));
                 break;
             }
 
             // data is for us, send ACK then handle it
             write_ack();
             request_handler(address, true, data);
+            
+            PRINT_PREFIX(); 
+            PRINTLN(F("i2c state=WAIT_FOR_START (RECEIVE_DATA done)"));
             break;
         }
         case SEND_DATA:
@@ -232,15 +275,23 @@ bool i2c::on_pcint0()
             state = WAIT_FOR_START;
 
             write_byte(data);
+
+            PRINT_PREFIX(); 
+            PRINTLN(F("i2c state=WAIT_FOR_START (SEND_DATA done)"));
             break;
         }
         default:
         {
             state = WAIT_FOR_START;
+            PRINT_PREFIX(); 
+            PRINTLN(F("i2c state=WAIT_FOR_START (invalid state)"));
             break;
         }
         }
     }
+
+    PRINT_PREFIX(); 
+    PRINTLN(F("i2c PCINT done"));
 
     // re-enable pin change interrupt
     // we are WAIT_FOR_START again
