@@ -215,18 +215,14 @@ bool i2c::on_pcint0()
                 write_ack();
 
                 // look at the R/W bit to determine next state
-                if (address & 1)
-                {
-                    state = SEND_DATA;
-                    PRINT_PREFIX();
-                    PRINTLN(F("i2c state=SEND_DATA (HANDLE_ADDRESS W set)"));
-                }
-                else 
-                {
-                    state = RECEIVE_DATA;
-                    PRINT_PREFIX();
-                    PRINTLN(F("i2c state=RECEIVE_DATA (HANDLE_ADDRESS W clear)"));
-                }
+                state = (address & 1) ? SEND_DATA : RECEIVE_DATA;
+                
+                // note: when replacing the above tenary with a if/else, the 
+                // binary grows for no reason, even on attiny13 target...
+                PRINT_PREFIX();
+                PRINT(F("i2c state="));
+                PRINT(state == SEND_DATA ? F("SEND_DATA") : F("RECEIVE_DATA"));
+                PRINTLN(F(" (HANDLE_ADDRESS)"));
             }
             else
             {
