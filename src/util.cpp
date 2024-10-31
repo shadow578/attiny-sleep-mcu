@@ -1,7 +1,6 @@
 #include "util.hpp"
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
-#include <avr/wdt.h>
 #include "print.hpp"
 
 #if IS_ATTINY13
@@ -13,30 +12,27 @@
         PRINT(F("sleep_for() seconds="));
         PRINTLN(seconds);
 
-        cli();
+        cli();                // disable interrupts
+        wdt_disable_actual(); // clear wdt reset flag and ensure WDT is known configuration
 
-        // enable the watchdog timer with a timeout of 8s, in interrupt mode
-        wdt_reset();
-        MCUSR &= ~_BV(WDRF);                     // clear wdt reset flag
-        WDTCR = _BV(WDE) | _BV(WDCE);            // enable WDT
-        WDTCR = _BV(WDE) | _BV(WDTIE) | WDTO_8S; // enable WDT interrupt, set timeout to 8s
-
-        // sleep for the specified time
-        for (uint32_t i = 0; i < seconds; i += 8)
+        // sleep for the specified number of seconds
+        for (uint32_t i = 0; i < seconds; i++)
         {
-            cli();                               // disable interrupts
-            set_sleep_mode(SLEEP_MODE_PWR_DOWN); // only WDT can wake up the MCU
+            // setup WDT
+            WDTCR |= _BV(WDCE) | _BV(WDE); // allow changes, enable WDT
+            WDTCR = _BV(WDTIE) | WDTO_1S;  // set WDT to interrupt only mode with 1s timeout
+
+            // sleep until WDT interrupt
+            set_sleep_mode(SLEEP_MODE_PWR_DOWN); // deepest sleep mode, only WDT can wake up the MCU
             wdt_reset();                         // start wdt at zero
             sei();                               // enable interrupts
             sleep_mode();                        // sleep until WDT interrupt
-            sleep_disable();
         }
 
+        // disable interrupts and WDT
         cli();
-
-        // disable WDT
         wdt_reset();
-        wdt_disable();
+        wdt_disable_actual();
     }
 #else
     // use a stub for testing
@@ -64,6 +60,7 @@ void reset_cpu()
     // then, we hang in a loop until the watchdog timer resets the CPU for us.
 
     // note: wdt_enable resets WDTIE, so we don't need to disable it explicitly
+    wdt_disable_actual();
     wdt_enable(WDTO_15MS);
     while (1)
         ;

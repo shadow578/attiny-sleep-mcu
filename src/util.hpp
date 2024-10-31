@@ -1,5 +1,6 @@
 #pragma once
 #include <avr/io.h>
+#include <avr/wdt.h>
 
 #define IS_ATTINY13 (defined(__AVR_ATtiny13__) || defined (__AVR_ATtiny13A__))
 
@@ -27,3 +28,18 @@ void sleep_for(const uint32_t seconds);
  * Reset the CPU.
  */
 void reset_cpu();
+
+/**
+ * Disable the watchdog timer and clear the watchdog timer reset flag.
+ *
+ * @note
+ * required, as per datasheet (WDE bit explanation on P. 49):
+ * WDE is overridden by WDRF in MCUSR.
+ * This means that WDE is always set when WDRF is set.
+ * To clear WDE, WDRF must be cleared first.
+ */
+inline void wdt_disable_actual()
+{
+    MCUSR &= ~_BV(WDRF); // clear WDT reset flag
+    wdt_disable();       // sets WDE to 0
+}

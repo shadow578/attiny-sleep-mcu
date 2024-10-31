@@ -9,11 +9,17 @@
 #include "pulse_counter.hpp"
 #include "i2c_device/i2c_device.hpp"
 
-// load enable pin
-constexpr uint8_t PIN_LOAD_EN = PB2;
+// load enable pin, attached to mosfet gate
+constexpr uint8_t PIN_LOAD_EN = PB1;
 
-// how long to sleep for in seconds
-constexpr uint32_t SLEEP_TIME = 30 * 60;
+// for how long the device should sleep before turning on the load again
+// uses the WDT for timing, so will be fairly inaccurate even with correction factor applied.
+// constant is in seconds
+constexpr uint32_t SLEEP_TIME = (30 * 60); // 30 minutes
+
+// correction factor for sleep time.
+// calibrate by measuring actual sleep time, then set this to (desired sleep time / actual sleep time)
+constexpr double SLEEP_TIME_CORRECTION = (30.0 / 37.0);
 
 // pin that low pulses are counted on
 // note: must be PB1 since INT0 is fixed to it
@@ -44,7 +50,8 @@ void power_down()
     PORTB = 0x00;
 
     // sleep for reqeusted time
-    sleep_for(SLEEP_TIME);
+    constexpr uint32_t SLEEP_TIME_ADJUSTED = static_cast<uint32_t>(static_cast<double>(SLEEP_TIME) * SLEEP_TIME_CORRECTION);
+    sleep_for(SLEEP_TIME_ADJUSTED);
 
     // reset the CPU
     reset_cpu();
@@ -112,12 +119,15 @@ void i2c_request_handler(const uint8_t address, const bool write, uint8_t &data)
 
 int main()
 {
+    // disable interrupts, we don't need them yet
+    cli();
+
+    // disable watchdog timer early in case it's enabled somehow
+    wdt_disable_actual();
+    
     PRINT_BEGIN();
     PRINT_PREFIX();
     PRINTLN();
-
-    // disable interrupts, we don't need them yet
-    cli();
 
     // disable ADC, internal COMP, and WDT to reduce power consumption
     PRINT_PREFIX();
@@ -126,7 +136,6 @@ int main()
     ACSR |= _BV(ACD);       // analog comparator disable = 1
     ADCSRA &= ~_BV(ADEN);   // ADC enable = 0
     power_adc_disable();    // ADC power reduction (PRR.PRADC) = 1
-    wdt_disable();          // disable watchdog timer
     power_timer0_disable(); // timer0 power reduction (PRR.PRTIM0) = 1
     // power_all_disable();
 
