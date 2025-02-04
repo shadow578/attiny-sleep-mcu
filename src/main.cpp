@@ -2,8 +2,10 @@
 #include <avr/io.h>
 #include <util/delay.h>
 
-#include "wdt.hpp"
+#include "i2c_device.hpp"
 #include "lp.hpp"
+#include "wdt.hpp"
+
 
 // pin definitions
 constexpr uint8_t PIN_PWR_DOWN = PB2; // pin to indicate that the load should be powered down

@@ -144,6 +144,10 @@
     if(usi_onRequestPtr) usi_onRequestPtr();                                  \
 }
 
+void    (*_onTwiDataRequest)(void);
+void    (*usi_onRequestPtr)(void);
+void    (*usi_onReceiverPtr)(uint8_t);
+
 typedef enum {
     USI_SLAVE_CHECK_ADDRESS                = 0x00,
     USI_SLAVE_SEND_DATA                    = 0x01,
@@ -193,7 +197,6 @@ bool usiTwiDataInTransmitBuffer(void) {
 }
 
 void usiTwiTransmitByte(uint8_t data) {
-    uint8_t tmphead;
     while (txCount == TWI_TX_BUFFER_SIZE);
     txBuf[txHead] = data;
     txHead = (txHead + 1) & TWI_TX_BUFFER_MASK;
