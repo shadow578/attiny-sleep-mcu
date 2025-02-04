@@ -28,6 +28,12 @@ namespace wdt
     void sleep_for(uint32_t seconds);
 
     /**
+     * signal the sleep_for routine that the last wakeup was not caused by 
+     * it's configured WDT interrupt, but by another interrupt.
+     */
+    void wakeup_was_not_wdt();
+
+    /**
      * Disable the watchdog timer and clear the watchdog timer reset flag.
      *
      * @note

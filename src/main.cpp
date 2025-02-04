@@ -9,6 +9,7 @@
 
 // pin definitions
 constexpr uint8_t PIN_LOAD_EN = PB1;  // pin attached to load mosfet gate
+constexpr uint8_t PIN_COUNTER = PB2;  // pin that pulses are counted on, e.g. for rain meter
 
 // i2c constants
 constexpr uint8_t I2C_DEVICE_ADDRESS = 0x64;
@@ -17,16 +18,19 @@ enum i2c_command : uint8_t
 {
     COMMAND_SLEEP = 0x01,
     COMMAND_SET_SLEEP_TIME = 0x02,
-    COMMAND_GET_COUNTER_VALUE = 0x03
+    COMMAND_GET_COUNTER_VALUE = 0x03,
+    COMMAND_RESET_COUNTER = 0x04
 };
 
 // for how long the device should sleep before turning on the load again
 // uses the WDT for timing, so will be fairly inaccurate
 static uint32_t sleep_time = (30 * 60); // 30 minutes
 
-
 // signal to go to sleep now
 static bool go_sleep = false;
+
+// counter for PIN_COUNTER falling edges
+static volatile uint32_t counter = 0;
 
 void on_i2c_request()
 {
@@ -55,23 +59,35 @@ void on_i2c_request()
     }
     case COMMAND_GET_COUNTER_VALUE:
     {
-         // TODO: actually send meaningful data
-        i2c_device::write(0xde);
-        i2c_device::write(0xad);
-        i2c_device::write(0xbe);
-        i2c_device::write(0xef);
+        i2c_device::write((counter << 24) & 0xff);
+        i2c_device::write((counter << 16) & 0xff);
+        i2c_device::write((counter << 8) & 0xff);
+        i2c_device::write(counter & 0xff);
         break;
+    }
+    case COMMAND_RESET_COUNTER:
+    {
+        counter = 0;
     }
     default:
         break;
     }
 }
 
-int main()
+ISR(PCINT0_vect)
 {
-    // disable interrupts, we don't need them yet
-    cli();
+    // count PIN_COUNTER on falling edge
+    if ((PORTB & _BV(PIN_COUNTER)) == 0)
+    {
+        counter++;
+    }
 
+    // signal wdt sleep routine that this was not a wdt interrupt
+    wdt::wakeup_was_not_wdt();
+}
+
+void loop()
+{
     // disable all feasible peripherals
     lp::power_down_all();
 
@@ -85,6 +101,15 @@ int main()
     // set LOAD_EN to output, set HIGH to turn on load
     DDRB |= _BV(PIN_LOAD_EN);
     PORTB |= _BV(PIN_LOAD_EN);
+
+    // set counter pin to input with pullup
+    // (redundant) DDRB &= ~_BV(PIN_COUNTER); 
+    PORTB |= _BV(PIN_COUNTER);
+
+    // enable PCINT
+    sei();
+    GIMSK |= _BV(PCIE);
+    PCMSK = _BV(PIN_COUNTER); // note: PCINTn and PBn happen to align on attiny85, so this is right
 
     // run idle while not sleeping
     while(!go_sleep)
@@ -100,8 +125,10 @@ int main()
 
     // wait for ~30 minutes
     wdt::sleep_for(sleep_time);
+}
 
-    // reset the CPU
-    wdt::reset_cpu();
+int main()
+{
+    for(;;) loop();
     return 0;
 }
