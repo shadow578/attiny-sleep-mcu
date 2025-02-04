@@ -12,18 +12,20 @@ constexpr uint8_t PIN_LOAD_EN = PB1;  // pin attached to load mosfet gate
 
 // i2c constants
 constexpr uint8_t I2C_DEVICE_ADDRESS = 0x64;
-constexpr uint8_t I2C_COMMAND_SLEEP = 0x01;
-constexpr uint8_t I2C_COMMAND_GET_COUNT = 0x02;
+
+enum i2c_command : uint8_t
+{
+    COMMAND_SLEEP = 0x01,
+    COMMAND_SET_SLEEP_TIME = 0x02,
+    COMMAND_GET_COUNTER_VALUE = 0x03
+};
 
 // for how long the device should sleep before turning on the load again
-// uses the WDT for timing, so will be fairly inaccurate even with correction factor applied.
-// constant is in seconds
-constexpr uint32_t SLEEP_TIME = (30 * 60); // 30 minutes
+// uses the WDT for timing, so will be fairly inaccurate
+static uint32_t sleep_time = (30 * 60); // 30 minutes
 
-// correction factor for sleep time.
-// calibrate by measuring actual sleep time, then set this to (desired sleep time / actual sleep time)
-constexpr double SLEEP_TIME_CORRECTION = (30.0 / 37.0);
 
+// signal to go to sleep now
 static bool go_sleep = false;
 
 void on_i2c_request()
@@ -31,16 +33,35 @@ void on_i2c_request()
     const uint8_t command = i2c_device::read();
     switch (command)
     {
-    case I2C_COMMAND_SLEEP:
+    case COMMAND_SLEEP:
+    {
         i2c_device::write(0x00);
         break;
-    case I2C_COMMAND_GET_COUNT:
-        // TODO: actually send meaningful data
+    }
+    case COMMAND_SET_SLEEP_TIME:
+    {
+        uint32_t t = 0;
+        t += i2c_device::read();
+        t <<= 8;
+        t += i2c_device::read();
+        t <<= 8;
+        t += i2c_device::read();
+        t <<= 8;
+        t += i2c_device::read();
+        t <<= 8;
+
+        sleep_time = t;
+        break;
+    }
+    case COMMAND_GET_COUNTER_VALUE:
+    {
+         // TODO: actually send meaningful data
         i2c_device::write(0xde);
         i2c_device::write(0xad);
         i2c_device::write(0xbe);
         i2c_device::write(0xef);
         break;
+    }
     default:
         break;
     }
@@ -74,8 +95,7 @@ int main()
     lp::reset_gpio();
 
     // wait for ~30 minutes
-    constexpr uint32_t SLEEP_TIME_ADJUSTED = static_cast<uint32_t>(static_cast<double>(SLEEP_TIME) * SLEEP_TIME_CORRECTION);
-    wdt::sleep_for(SLEEP_TIME_ADJUSTED);
+    wdt::sleep_for(sleep_time);
 
     // reset the CPU
     wdt::reset_cpu();
