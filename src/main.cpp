@@ -90,6 +90,10 @@ int main()
     while(!go_sleep)
         _delay_ms(10);
 
+    // re-disable all feasible peripherals again, to make sure
+    // e.g. USI will have been re-enabled
+    lp::power_down_all();
+
     // reset all pins for low-power
     // this also turns off the load
     lp::reset_gpio();

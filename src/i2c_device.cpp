@@ -2,12 +2,14 @@ extern "C"
 {
     #include <utility/USI_TWI_Slave.h>
 }
+#include <avr/power.h>
 
 #include "i2c_device.hpp"
 
 
 void i2c_device::begin(uint8_t address)
 {
+    power_usi_enable();
     usiTwiSlaveInit(address);
 }
 

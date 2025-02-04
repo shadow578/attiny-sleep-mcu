@@ -10,9 +10,9 @@ void lp::power_down_all()
     ADCSRB &= ~_BV(ACME);   // analog comparator multiplexer enable = 0
     ACSR |= _BV(ACD);       // analog comparator disable = 1
     ADCSRA &= ~_BV(ADEN);   // ADC enable = 0
-    power_adc_disable();    // ADC power reduction (PRR.PRADC) = 1
-    power_timer0_disable(); // timer0 power reduction (PRR.PRTIM0) = 1
-    // power_all_disable();
+    //power_adc_disable();    // ADC power reduction (PRR.PRADC) = 1
+    //power_timer0_disable(); // timer0 power reduction (PRR.PRTIM0) = 1
+    power_all_disable();
 }
 
 void lp::reset_gpio()
