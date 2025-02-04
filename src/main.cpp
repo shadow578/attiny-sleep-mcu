@@ -70,7 +70,7 @@ void sleep_for(uint32_t seconds)
     {
         // setup WDT
         WDTCR |= _BV(WDCE) | _BV(WDE); // allow changes, enable WDT
-        WDTCR = _BV(WDTIE) | WDTO_1S;  // set WDT to interrupt only mode with 1s timeout
+        WDTCR = _BV(WDIE) | WDTO_1S;   // set WDT to interrupt only mode with 1s timeout
 
         // sleep until WDT interrupt
         set_sleep_mode(SLEEP_MODE_PWR_DOWN); // deepest sleep mode, only WDT can wake up the MCU
