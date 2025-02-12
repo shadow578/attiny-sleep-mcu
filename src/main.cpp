@@ -8,8 +8,8 @@
 
 
 // pin definitions
-constexpr uint8_t PIN_LOAD_EN = PB1;  // pin attached to load mosfet gate
-constexpr uint8_t PIN_COUNTER = PB2;  // pin that pulses are counted on, e.g. for rain meter
+constexpr uint8_t PIN_LOAD_EN = PB4;  // pin attached to load mosfet gate
+constexpr uint8_t PIN_COUNTER = PB1;  // pin that pulses are counted on, e.g. for rain meter
 
 // i2c constants
 constexpr uint8_t I2C_DEVICE_ADDRESS = 0x64;
@@ -40,6 +40,7 @@ void on_i2c_request()
     case COMMAND_SLEEP:
     {
         i2c_device::write(0x00);
+        go_sleep = true;
         break;
     }
     case COMMAND_SET_SLEEP_TIME:
