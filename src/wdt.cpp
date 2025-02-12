@@ -17,7 +17,8 @@ void wdt::disable_actual()
 void wdt::sleep_for(uint32_t seconds)
 {
     cli();                // disable interrupts
-    disable_actual(); // clear wdt reset flag and ensure WDT is known configuration
+    disable_actual();     // clear wdt reset flag and ensure WDT is known configuration
+    ignore_wakeup = false;
 
     // sleep for the specified number of seconds
     for (uint32_t i = 0; i < seconds;)
@@ -27,9 +28,9 @@ void wdt::sleep_for(uint32_t seconds)
         WDTCR = _BV(WDIE) | WDTO_1S;   // set WDT to interrupt only mode with 1s timeout
 
         // sleep until WDT interrupt
-        ignore_wakeup = false;
         set_sleep_mode(SLEEP_MODE_PWR_DOWN); // deepest sleep mode, only WDT can wake up the MCU
-        wdt_reset();                         // start wdt at zero
+        if (!ignore_wakeup) wdt_reset();     // start wdt at zero unless last wakeup was not caused by WDT
+        ignore_wakeup = false;
         sei();                               // enable interrupts
         sleep_mode();                        // sleep until WDT interrupt
                                              // after interrupt, CPU continues here
