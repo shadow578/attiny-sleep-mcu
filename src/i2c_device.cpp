@@ -28,12 +28,12 @@ uint8_t i2c_device::read()
     return usiTwiReceiveByte();
 }
 
-void i2c_device::on_receive(void (*callback)(uint8_t))
+void i2c_device::on_write(void (*callback)(uint8_t))
 {
     usi_onReceiverPtr = callback;
 }
 
-void i2c_device::on_request(void (*callback)(void))
+void i2c_device::on_read(void (*callback)(void))
 {
     usi_onRequestPtr = callback;
 }

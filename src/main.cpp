@@ -32,10 +32,17 @@ static bool go_sleep = false;
 // counter for PIN_COUNTER falling edges
 static volatile uint32_t counter = 0;
 
-void on_i2c_request()
+// last i2c command received
+static volatile uint8_t i2c_command = 0;
+
+void on_i2c_write(const uint8_t len)
 {
-    const uint8_t command = i2c_device::read();
-    switch (command)
+    go_sleep = true;
+
+    if (len < 1) return;
+
+    i2c_command = i2c_device::read();
+    switch (i2c_command)
     {
     case COMMAND_SLEEP:
     {
@@ -45,6 +52,9 @@ void on_i2c_request()
     }
     case COMMAND_SET_SLEEP_TIME:
     {
+        // need at least 4 bytes + command byte
+        if (len < 5) return;
+
         uint32_t t = 0;
         t += i2c_device::read();
         t <<= 8;
@@ -60,10 +70,7 @@ void on_i2c_request()
     }
     case COMMAND_GET_COUNTER_VALUE:
     {
-        i2c_device::write((counter << 24) & 0xff);
-        i2c_device::write((counter << 16) & 0xff);
-        i2c_device::write((counter << 8) & 0xff);
-        i2c_device::write(counter & 0xff);
+        // send counter value in on_i2c_read() function
         break;
     }
     case COMMAND_RESET_COUNTER:
@@ -73,6 +80,27 @@ void on_i2c_request()
     default:
         break;
     }
+}
+
+void on_i2c_read()
+{
+    go_sleep = true;
+
+    switch(i2c_command)
+    {
+    case COMMAND_GET_COUNTER_VALUE:
+    {
+        i2c_device::write((counter << 24) & 0xff);
+        i2c_device::write((counter << 16) & 0xff);
+        i2c_device::write((counter << 8) & 0xff);
+        i2c_device::write(counter & 0xff);
+    }
+    default:
+        break;
+    }
+
+    // reset command
+    i2c_command = 0;
 }
 
 ISR(PCINT0_vect)
@@ -97,7 +125,8 @@ void loop()
 
     // setup i2c device
     i2c_device::begin(I2C_DEVICE_ADDRESS);
-    i2c_device::on_request(on_i2c_request);
+    i2c_device::on_write(on_i2c_write);
+    i2c_device::on_read(on_i2c_read);
 
     // set LOAD_EN to output, set HIGH to turn on load
     DDRB |= _BV(PIN_LOAD_EN);
@@ -113,8 +142,15 @@ void loop()
     PCMSK = _BV(PIN_COUNTER); // note: PCINTn and PBn happen to align on attiny85, so this is right
 
     // run idle while not sleeping
+    uint32_t c = 0;
     while(!go_sleep)
+    {
         _delay_ms(10);
+        c++;
+
+        // after 30 seconds
+        //if (c > 3000) go_sleep = true;
+    }
 
     // re-disable all feasible peripherals again, to make sure
     // e.g. USI will have been re-enabled

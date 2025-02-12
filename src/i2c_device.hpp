@@ -14,6 +14,15 @@ namespace i2c_device
     uint8_t available();
     uint8_t read();
 
-    void on_receive(void (*callback)(uint8_t));
-    void on_request(void (*callback)(void));
+    /**
+     * @brief set callback for write to device
+     * @param callback function to call when data is received. parameter is number of bytes available
+     */
+    void on_write(void (*callback)(uint8_t));
+
+    /**
+     * @brief set callback for read from device
+     * @param callback function to call when data is requested
+     */
+    void on_read(void (*callback)(void));
 } // namespace i2c_device
