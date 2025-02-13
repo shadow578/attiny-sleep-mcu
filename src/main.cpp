@@ -40,8 +40,6 @@ static volatile uint8_t i2c_command = 0;
 
 void on_i2c_write(const int len)
 {
-    go_sleep = true;
-
     if (len < 1) return;
 
     i2c_command = Wire.read();
@@ -86,8 +84,6 @@ void on_i2c_write(const int len)
 
 void on_i2c_read()
 {
-    go_sleep = true;
-
     switch(i2c_command)
     {
     case COMMAND_GET_COUNTER_VALUE:
@@ -126,12 +122,10 @@ void loop()
 
     // ensure all pins start out as input with no pull-up
     lp::reset_gpio();
-
-    // re-enable USI and interrupts for I2C
-    power_usi_enable();
-    sei();
-
+    
     // setup i2c device
+    power_usi_enable(); // disabled by lp::power_down_all()
+    Wire.end(); // ensure it's off
     Wire.begin(I2C_DEVICE_ADDRESS);
     Wire.onReceive(on_i2c_write);
     Wire.onRequest(on_i2c_read);
@@ -150,15 +144,11 @@ void loop()
     PCMSK = _BV(PIN_COUNTER); // note: PCINTn and PBn happen to align on attiny85, so this is right
 
     // run idle while not sleeping
-    uint32_t c = 0;
     while(!go_sleep)
-    {
         _delay_ms(10);
-        c++;
 
-        // after 30 seconds
-        //if (c > 3000) go_sleep = true;
-    }
+    // disable i2c
+    Wire.end();
 
     // re-disable all feasible peripherals again, to make sure
     // e.g. USI will have been re-enabled
