@@ -114,7 +114,7 @@ void on_i2c_read()
 ISR(PCINT0_vect)
 {
     // count PIN_COUNTER on falling edge
-    if ((PORTB & _BV(PIN_COUNTER)) == 0)
+    if (!(PINB & _BV(PIN_COUNTER)))
     {
         counter++;
     }
@@ -168,6 +168,10 @@ void loop()
     // reset all pins for low-power
     // this also turns off the load
     lp::reset_gpio();
+
+    // re-setup counter pin, as we'd like to keep counting while sleeping
+    // (redundant) DDRB &= ~_BV(PIN_COUNTER);
+    PORTB |= _BV(PIN_COUNTER);
 
     // wait for ~30 minutes
     wdt::sleep_for(sleep_time);
