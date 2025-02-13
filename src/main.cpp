@@ -20,13 +20,14 @@ constexpr uint8_t I2C_DEVICE_ADDRESS = 0x64;
 enum i2c_command : uint8_t
 {
     COMMAND_SLEEP = 0x01,
-    COMMAND_SET_SLEEP_TIME = 0x02,
-    COMMAND_GET_COUNTER_VALUE = 0x03,
-    COMMAND_RESET_COUNTER = 0x04
+    COMMAND_GET_COUNTER = 0x02,
+    COMMAND_GET_COUNTER_AND_RESET = 0x03, // same as GET_COUNTER, but also resets counter to zero
 };
 
 // for how long the device should sleep before turning on the load again
 // uses the WDT for timing, so will be fairly inaccurate
+// this is the default value, it may be changed by i2c command, after 
+// which that value will be retained
 static uint32_t sleep_time = (30 * 60); // 30 minutes
 
 // signal to go to sleep now
@@ -38,6 +39,24 @@ static volatile uint32_t counter = 0;
 // last i2c command received
 static volatile uint8_t i2c_command = 0;
 
+uint32_t wire_read_uint32()
+{
+    uint32_t t = 0;
+    t |= static_cast<uint32_t>(Wire.read()) << 24;
+    t |= static_cast<uint32_t>(Wire.read()) << 16;
+    t |= static_cast<uint32_t>(Wire.read()) << 8;
+    t |= static_cast<uint32_t>(Wire.read());
+    return t;
+}
+
+void wire_write_uint32(const uint32_t v)
+{
+    Wire.write((v >> 24) & 0xff);
+    Wire.write((v >> 16) & 0xff);
+    Wire.write((v >> 8) & 0xff);
+    Wire.write(v & 0xff);
+}
+
 void on_i2c_write(const int len)
 {
     if (len < 1) return;
@@ -47,35 +66,22 @@ void on_i2c_write(const int len)
     {
     case COMMAND_SLEEP:
     {
+        // if command has a 4 byte argument, it's there to set sleep time
+        if (len >= 5)
+        {
+            sleep_time = wire_read_uint32();
+        }
+
+        // in any case, go to sleep
         go_sleep = true;
         break;
     }
-    case COMMAND_SET_SLEEP_TIME:
-    {
-        // need at least 4 bytes + command byte
-        if (len < 5) return;
-
-        uint32_t t = 0;
-        t += Wire.read();
-        t <<= 8;
-        t += Wire.read();
-        t <<= 8;
-        t += Wire.read();
-        t <<= 8;
-        t += Wire.read();
-        t <<= 8;
-
-        sleep_time = t;
-        break;
-    }
-    case COMMAND_GET_COUNTER_VALUE:
+    case COMMAND_GET_COUNTER:
+    case COMMAND_GET_COUNTER_AND_RESET:
     {
         // send counter value in on_i2c_read() function
+        // also reset it there if necessary
         break;
-    }
-    case COMMAND_RESET_COUNTER:
-    {
-        counter = 0;
     }
     default:
         break;
@@ -86,12 +92,16 @@ void on_i2c_read()
 {
     switch(i2c_command)
     {
-    case COMMAND_GET_COUNTER_VALUE:
+    case COMMAND_GET_COUNTER:
+    case COMMAND_GET_COUNTER_AND_RESET:
     {
-        Wire.write((counter << 24) & 0xff);
-        Wire.write((counter << 16) & 0xff);
-        Wire.write((counter << 8) & 0xff);
-        Wire.write(counter & 0xff);
+        wire_write_uint32(counter);
+
+        if (i2c_command == COMMAND_GET_COUNTER_AND_RESET)
+        {
+            counter = 0;
+        }
+        break;
     }
     default:
         break;
@@ -144,6 +154,7 @@ void loop()
     PCMSK = _BV(PIN_COUNTER); // note: PCINTn and PBn happen to align on attiny85, so this is right
 
     // run idle while not sleeping
+    go_sleep = false;
     while(!go_sleep)
         _delay_ms(10);
 
