@@ -1,8 +1,11 @@
+#include <Arduino.h>
+#include <Wire.h>
+
 #include <avr/interrupt.h>
 #include <avr/io.h>
+#include <avr/power.h>
 #include <util/delay.h>
 
-#include "i2c_device.hpp"
 #include "lp.hpp"
 #include "wdt.hpp"
 
@@ -35,18 +38,17 @@ static volatile uint32_t counter = 0;
 // last i2c command received
 static volatile uint8_t i2c_command = 0;
 
-void on_i2c_write(const uint8_t len)
+void on_i2c_write(const int len)
 {
     go_sleep = true;
 
     if (len < 1) return;
 
-    i2c_command = i2c_device::read();
+    i2c_command = Wire.read();
     switch (i2c_command)
     {
     case COMMAND_SLEEP:
     {
-        i2c_device::write(0x00);
         go_sleep = true;
         break;
     }
@@ -56,13 +58,13 @@ void on_i2c_write(const uint8_t len)
         if (len < 5) return;
 
         uint32_t t = 0;
-        t += i2c_device::read();
+        t += Wire.read();
         t <<= 8;
-        t += i2c_device::read();
+        t += Wire.read();
         t <<= 8;
-        t += i2c_device::read();
+        t += Wire.read();
         t <<= 8;
-        t += i2c_device::read();
+        t += Wire.read();
         t <<= 8;
 
         sleep_time = t;
@@ -90,10 +92,10 @@ void on_i2c_read()
     {
     case COMMAND_GET_COUNTER_VALUE:
     {
-        i2c_device::write((counter << 24) & 0xff);
-        i2c_device::write((counter << 16) & 0xff);
-        i2c_device::write((counter << 8) & 0xff);
-        i2c_device::write(counter & 0xff);
+        Wire.write((counter << 24) & 0xff);
+        Wire.write((counter << 16) & 0xff);
+        Wire.write((counter << 8) & 0xff);
+        Wire.write(counter & 0xff);
     }
     default:
         break;
@@ -115,6 +117,8 @@ ISR(PCINT0_vect)
     wdt::wakeup_was_not_wdt();
 }
 
+void setup() {}
+
 void loop()
 {
     // disable all feasible peripherals
@@ -123,10 +127,14 @@ void loop()
     // ensure all pins start out as input with no pull-up
     lp::reset_gpio();
 
+    // re-enable USI and interrupts for I2C
+    power_usi_enable();
+    sei();
+
     // setup i2c device
-    i2c_device::begin(I2C_DEVICE_ADDRESS);
-    i2c_device::on_write(on_i2c_write);
-    i2c_device::on_read(on_i2c_read);
+    Wire.begin(I2C_DEVICE_ADDRESS);
+    Wire.onReceive(on_i2c_write);
+    Wire.onRequest(on_i2c_read);
 
     // set LOAD_EN to output, set HIGH to turn on load
     DDRB |= _BV(PIN_LOAD_EN);
@@ -162,10 +170,4 @@ void loop()
 
     // wait for ~30 minutes
     wdt::sleep_for(sleep_time);
-}
-
-int main()
-{
-    for(;;) loop();
-    return 0;
 }
