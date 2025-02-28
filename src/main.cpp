@@ -9,6 +9,8 @@
 #include "lp.hpp"
 #include "wdt.hpp"
 
+#define __NO_INIT __attribute__((section(".noinit")))
+
 
 // pin definitions
 constexpr uint8_t PIN_LOAD_EN = PB4;  // pin attached to load mosfet gate
@@ -28,7 +30,9 @@ enum i2c_command : uint8_t
 // uses the WDT for timing, so will be fairly inaccurate
 // this is the default value, it may be changed by i2c command, after 
 // which that value will be retained
-static uint32_t sleep_time = (30 * 60); // 30 minutes
+constexpr uint32_t DEFAULT_SLEEP_TIME = (5 * 60); // 30 minutes TODO 5 minutes for testing
+constexpr uint32_t MAX_SLEEP_TIME = (60 * 60); // 1 hour
+static __NO_INIT uint32_t sleep_time;
 
 // signal to go to sleep now
 static bool go_sleep = false;
@@ -123,15 +127,52 @@ ISR(PCINT0_vect)
     wdt::wakeup_was_not_wdt();
 }
 
-void setup() {}
+bool is_cold_boot()
+{
+    // if reset reason is external or power-on, it's a cold boot
+    if (!(MCUSR & _BV(EXTRF) || MCUSR & _BV(PORF)))
+        return false;
 
-void loop()
+    // clear reset flags
+    MCUSR = 0;
+    return true;
+}
+
+void setup() 
 {
     // disable all feasible peripherals
     lp::power_down_all();
 
-    // ensure all pins start out as input with no pull-up
+    // reset all pins for low-power
+    // this also turns off the load
     lp::reset_gpio();
+
+    // set counter pin to input with pullup
+    // (redundant) DDRB &= ~_BV(PIN_COUNTER); 
+    PORTB |= _BV(PIN_COUNTER);
+
+    // enable PCINT so we can count pulses while sleeping
+    GIMSK |= _BV(PCIE);
+    PCMSK = _BV(PIN_COUNTER); // note: PCINTn and PBn happen to align on attiny85, so this is right
+    sei();
+
+    // wait for ~30 minutes, only if not a cold boot
+    if (!is_cold_boot())
+    {
+        wdt::sleep_for(constrain(sleep_time, 10, MAX_SLEEP_TIME));
+    }
+    sleep_time = DEFAULT_SLEEP_TIME;
+
+    // ensure GPIO and peripherals are in a known state
+    lp::power_down_all();
+    lp::reset_gpio();
+
+    // re-enable counter pin
+    // (redundant) DDRB &= ~_BV(PIN_COUNTER);
+    PORTB |= _BV(PIN_COUNTER);
+
+    // ensure interrupts are enabled
+    sei();
     
     // setup i2c device
     power_usi_enable(); // disabled by lp::power_down_all()
@@ -144,35 +185,13 @@ void loop()
     DDRB |= _BV(PIN_LOAD_EN);
     PORTB |= _BV(PIN_LOAD_EN);
 
-    // set counter pin to input with pullup
-    // (redundant) DDRB &= ~_BV(PIN_COUNTER); 
-    PORTB |= _BV(PIN_COUNTER);
-
-    // enable PCINT
-    sei();
-    GIMSK |= _BV(PCIE);
-    PCMSK = _BV(PIN_COUNTER); // note: PCINTn and PBn happen to align on attiny85, so this is right
-
     // run idle while not sleeping
     go_sleep = false;
     while(!go_sleep)
         _delay_ms(10);
 
-    // disable i2c
-    Wire.end();
-
-    // re-disable all feasible peripherals again, to make sure
-    // e.g. USI will have been re-enabled
-    lp::power_down_all();
-
-    // reset all pins for low-power
-    // this also turns off the load
-    lp::reset_gpio();
-
-    // re-setup counter pin, as we'd like to keep counting while sleeping
-    // (redundant) DDRB &= ~_BV(PIN_COUNTER);
-    PORTB |= _BV(PIN_COUNTER);
-
-    // wait for ~30 minutes
-    wdt::sleep_for(sleep_time);
+    // reset the cpu to enter sleep
+    wdt::reset_cpu();
 }
+
+void loop() {}
