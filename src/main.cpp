@@ -11,10 +11,11 @@
 
 #define __NO_INIT __attribute__((section(".noinit")))
 
+#define COUNT_ONLY_FALLING_EDGE 0 // if 1, only count falling edges on PIN_COUNTER. if 0, count level changes
 
 // pin definitions
-constexpr uint8_t PIN_LOAD_EN = PB4;  // pin attached to load mosfet gate
-constexpr uint8_t PIN_COUNTER = PB1;  // pin that pulses are counted on, e.g. for rain meter
+constexpr uint8_t PIN_LOAD_EN = PB4; // pin attached to load mosfet gate
+constexpr uint8_t PIN_COUNTER = PB1; // pin that pulses are counted on, e.g. for rain meter
 
 // i2c constants
 constexpr uint8_t I2C_DEVICE_ADDRESS = 0x64;
@@ -28,10 +29,10 @@ enum i2c_command : uint8_t
 
 // for how long the device should sleep before turning on the load again
 // uses the WDT for timing, so will be fairly inaccurate
-// this is the default value, it may be changed by i2c command, after 
+// this is the default value, it may be changed by i2c command, after
 // which that value will be retained
 constexpr uint32_t DEFAULT_SLEEP_TIME = (5 * 60); // 30 minutes TODO 5 minutes for testing
-constexpr uint32_t MAX_SLEEP_TIME = (60 * 60); // 1 hour
+constexpr uint32_t MAX_SLEEP_TIME = (60 * 60);    // 1 hour
 static __NO_INIT uint32_t sleep_time;
 
 // signal to go to sleep now
@@ -63,7 +64,8 @@ void wire_write_uint32(const uint32_t v)
 
 void on_i2c_write(const int len)
 {
-    if (len < 1) return;
+    if (len < 1)
+        return;
 
     i2c_command = Wire.read();
     switch (i2c_command)
@@ -94,7 +96,7 @@ void on_i2c_write(const int len)
 
 void on_i2c_read()
 {
-    switch(i2c_command)
+    switch (i2c_command)
     {
     case COMMAND_GET_COUNTER:
     case COMMAND_GET_COUNTER_AND_RESET:
@@ -117,11 +119,16 @@ void on_i2c_read()
 
 ISR(PCINT0_vect)
 {
+#if COUNT_ONLY_FALLING_EDGE == 1
     // count PIN_COUNTER on falling edge
     if (!(PINB & _BV(PIN_COUNTER)))
     {
         counter++;
     }
+#else
+    // count PIN_COUNTER on level change
+    counter++;
+#endif
 
     // signal wdt sleep routine that this was not a wdt interrupt
     wdt::wakeup_was_not_wdt();
@@ -138,7 +145,7 @@ bool is_cold_boot()
     return true;
 }
 
-void setup() 
+void setup()
 {
     // disable all feasible peripherals
     lp::power_down_all();
@@ -148,7 +155,7 @@ void setup()
     lp::reset_gpio();
 
     // set counter pin to input with pullup
-    // (redundant) DDRB &= ~_BV(PIN_COUNTER); 
+    // (redundant) DDRB &= ~_BV(PIN_COUNTER);
     PORTB |= _BV(PIN_COUNTER);
 
     // enable PCINT so we can count pulses while sleeping
@@ -173,10 +180,10 @@ void setup()
 
     // ensure interrupts are enabled
     sei();
-    
+
     // setup i2c device
     power_usi_enable(); // disabled by lp::power_down_all()
-    Wire.end(); // ensure it's off
+    Wire.end();         // ensure it's off
     Wire.begin(I2C_DEVICE_ADDRESS);
     Wire.onReceive(on_i2c_write);
     Wire.onRequest(on_i2c_read);
@@ -187,7 +194,7 @@ void setup()
 
     // run idle while not sleeping
     go_sleep = false;
-    while(!go_sleep)
+    while (!go_sleep)
         _delay_ms(10);
 
     // reset the cpu to enter sleep
