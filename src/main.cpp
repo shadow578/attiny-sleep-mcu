@@ -11,7 +11,7 @@
 
 #define __NO_INIT __attribute__((section(".noinit")))
 
-#define COUNT_ONLY_FALLING_EDGE 0 // if 1, only count falling edges on PIN_COUNTER. if 0, count level changes
+#define COUNT_ONLY_FALLING_EDGE 1 // if 1, only count falling edges on PIN_COUNTER. if 0, count level changes
 
 // pin definitions
 constexpr uint8_t PIN_LOAD_EN = PB4; // pin attached to load mosfet gate
@@ -39,7 +39,7 @@ static __NO_INIT uint32_t sleep_time;
 static bool go_sleep = false;
 
 // counter for PIN_COUNTER falling edges
-static volatile uint32_t counter = 0;
+static volatile __NO_INIT uint32_t counter;
 
 // last i2c command received
 static volatile uint8_t i2c_command = 0;
@@ -163,9 +163,14 @@ void setup()
     PCMSK = _BV(PIN_COUNTER); // note: PCINTn and PBn happen to align on attiny85, so this is right
     sei();
 
-    // wait for ~30 minutes, only if not a cold boot
-    if (!is_cold_boot())
+    if (is_cold_boot())
     {
+        // on cold boot, reset the counter as it's not initialized by default
+        counter = 0;
+    }
+    else
+    {
+        // wait for ~30 minutes, only if not a cold boot
         wdt::sleep_for(constrain(sleep_time, 10, MAX_SLEEP_TIME));
     }
     sleep_time = DEFAULT_SLEEP_TIME;
