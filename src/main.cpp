@@ -14,7 +14,7 @@
 #define COUNT_ONLY_FALLING_EDGE 1 // if 1, only count falling edges on PIN_COUNTER. if 0, count level changes
 
 // pin definitions
-constexpr uint8_t PIN_LOAD_EN = PB4; // pin attached to load mosfet gate
+constexpr uint8_t PIN_LOAD_EN = PB4; // pin attached to load mosfet gate OR TPS63020 enable pin
 constexpr uint8_t PIN_COUNTER = PB1; // pin that pulses are counted on, e.g. for rain meter
 
 // i2c constants
