@@ -3,6 +3,9 @@
 use a Attiny13a to switch power to e.g. a ESP8266, to build a power-efficient weather station
 for schematic, see docs/schematic.pdf
 
+
+for a version that includes pulse conting (e.g. for a rain meter), see [the rain-meter branch](https://github.com/shadow578/attiny-sleep-mcu/tree/rain-meter).
+
 ## Power Usage
 
 the following table shows the power usage of the Attiny13a during sleep mode (attiny13_slow environment):
