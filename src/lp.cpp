@@ -17,6 +17,7 @@ void lp::power_down_all()
 
 void lp::reset_gpio()
 {
-    DDRB = 0x00;
-    PORTB = 0x00;
+    DDRB = 0x00;  // all pins to input
+    PORTB = 0x00; // pullups off
+    DIDR0 = 0x3F; // digital buffers off
 }
