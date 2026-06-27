@@ -27,13 +27,19 @@ enum i2c_command : uint8_t
     COMMAND_GET_COUNTER_AND_RESET = 0x03, // same as GET_COUNTER, but also resets counter to zero
 };
 
+enum command_sleep_flags : uint8_t
+{
+    SLEEP_FLAG_WAKEUP_EARLY = 1 << 0
+};
+
 // for how long the device should sleep before turning on the load again
 // uses the WDT for timing, so will be fairly inaccurate
 // this is the default value, it may be changed by i2c command, after
 // which that value will be retained
-constexpr uint32_t DEFAULT_SLEEP_TIME = (5 * 60); // 30 minutes TODO 5 minutes for testing
+constexpr uint32_t DEFAULT_SLEEP_TIME = (5 * 60); // 5 minutes
 constexpr uint32_t MAX_SLEEP_TIME = (60 * 60);    // 1 hour
 static __NO_INIT uint32_t sleep_time;
+static __NO_INIT uint8_t sleep_flags;
 
 // signal to go to sleep now
 static bool go_sleep = false;
@@ -76,6 +82,12 @@ void on_i2c_write(const int len)
         if (len >= 5)
         {
             sleep_time = wire_read_uint32();
+        }
+
+        // if there's a fifth byte, it's the sleep flags
+        if (len >= 6)
+        {
+            sleep_flags = Wire.read();
         }
 
         // in any case, go to sleep
@@ -145,6 +157,18 @@ bool is_cold_boot()
     return true;
 }
 
+bool on_sleep_tick(const uint32_t seconds_elapsed, const uint32_t sleep_time)
+{
+    // if sleep flags set early wakeup and counter is non-zero, end sleep
+    if ((sleep_flags & SLEEP_FLAG_WAKEUP_EARLY) && (counter > 0))
+    {
+        return true;
+    }
+
+    // continue sleep
+    return false;
+}
+
 void setup()
 {
     // disable all feasible peripherals
@@ -171,9 +195,10 @@ void setup()
     else
     {
         // wait for ~30 minutes, only if not a cold boot
-        wdt::sleep_for(constrain(sleep_time, 10, MAX_SLEEP_TIME));
+        wdt::sleep_for(constrain(sleep_time, 10, MAX_SLEEP_TIME), on_sleep_tick);
     }
     sleep_time = DEFAULT_SLEEP_TIME;
+    sleep_flags = 0;
 
     // ensure GPIO and peripherals are in a known state
     lp::power_down_all();

@@ -14,7 +14,7 @@ void wdt::disable_actual()
     wdt_disable();       // sets WDE to 0
 }
 
-void wdt::sleep_for(uint32_t seconds)
+void wdt::sleep_for(uint32_t seconds, sleep_tick_callback_t tick_callback)
 {
     cli();                // disable interrupts
     disable_actual();     // clear wdt reset flag and ensure WDT is known configuration
@@ -35,6 +35,12 @@ void wdt::sleep_for(uint32_t seconds)
         sleep_mode();                        // sleep until WDT interrupt
                                              // after interrupt, CPU continues here
         if (!ignore_wakeup) i++;             // wakeup was not caused by something else, increment i
+
+        // call tick callback if provided, allow early exit from sleep
+        if (tick_callback && tick_callback(i, seconds))
+        {
+            break;
+        }
     }
 
     // disable interrupts and WDT
